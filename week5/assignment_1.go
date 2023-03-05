@@ -6,13 +6,12 @@ import (
 )
 
 type System interface {
-    Register(Registration)
+	Register(Registration)
 	SignIn(Database)
-	AddItem(string,float64)
+	AddItem(string, float64)
 	SearchItem(string)
-	FilteringItems(float64,float64,float64,float64)
+	FilteringItems(float64, float64, float64, float64)
 	Rate(Database, Authorization, string, float64)
-    
 }
 
 type Registration struct {
@@ -86,8 +85,8 @@ func (d *Database) FilteringItems(price1, price2, rating1, rating2 float64) {
 			fmt.Println("We found item that you searched!")
 			fmt.Println(d.Items[i])
 			return
-		
-		} 
+
+		}
 	}
 	fmt.Println("No such item with these price and rating!!!")
 }
@@ -103,11 +102,11 @@ func Rate(d Database, a Authorization, itemName string, rating float64) {
 					sum += d.Items[i].RatingList[j]
 				}
 				d.Items[i].Rating = sum / float64(len(d.Items[i].RatingList))
-			}else{
+			} else {
 				continue
 			}
 		}
-		
+
 	} else {
 		fmt.Println("UNKNOWN!!!")
 	}

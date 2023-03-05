@@ -2,16 +2,21 @@ package main
 
 import (
 	"fmt"
-	"strings"
-	"bufio"
-	"os"
+	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
-// User represents a user in the system
-type User struct {
-	Username string
-	Password string
+
+type System interface {
+	Register(Registration)
+	SignIn(Database)
+	AddItem(string,float64)
+	SearchItem(string)
+	FilteringItems(float64,float64,float64,float64)
+	Rate(Database, Authorization, string, float64)
+
 }
 
 type Registration struct {
@@ -37,127 +42,82 @@ type Item struct {
 type Database struct {
 	Logins []Registration
 	Items  []Item
-	Users  []User
 }
 
-func (d *Database) LoadUsers() error{
-	file, err := os.Open("users.txt")
+func (d *Database) RegisterHandler(c *gin.Context) {
+	var r Registration
+	err := c.ShouldBindJSON(&r)
 	if err != nil {
-		return err
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, ",")
-		if len(parts) != 2 {
-			continue
-		}
-		user := &User{
-			Username: parts[0],
-			Password: parts[1],
-		}
-		d.Users = append(d.Users, *user)
-	}
-	return scanner.Err()
-}
-
-func (d *Database) Register(r Registration) *Registration {
-	for i := 0; i < len(d.Logins); i++ {
-		if d.Logins[i].Login == r.Login && d.Logins[i].Password == r.Password {
-			// return fmt.Errorf("username %s %s already exists", r.Name, r.Surname)
-			fmt.Printf("User %s %s already exists!\n", r.Name, r.Surname)
-			return nil
-		}
-	}
-	reg := &Registration{r.Name, r.Surname, r.Age, r.Login, r.Password}
-	d.Logins = append(d.Logins, Registration{r.Name, r.Surname, r.Age, r.Login, r.Password})
-	fmt.Println("You registred!")
-	return reg
-}
-
-func (a *Authorization) SignIn(d Database) string {
-	for i := 0; i < len(d.Logins); i++ {
-		if d.Logins[i].Login == a.Login && d.Logins[i].Password == a.Password {
-			return "You entered system!"
-		}
-	}
-	return "No authorized!!!"
-}
-
-func (d *Database) AddItem(name string, price float64) *Item {
-	item := &Item{name, price, 0, nil}
-	d.Items = append(d.Items, Item{name, price, 0, nil})
-	return item
-}
-
-func (d *Database) SearchItem(name string) {
-	for i := 0; i < len(d.Items); i++ {
-		if strings.Contains(strings.ToUpper(d.Items[i].Name), strings.ToUpper(name)) {
-			fmt.Println(d.Items[i])
-			return
-		} else {
-			fmt.Printf("Did not find an item like %s", name)
-		}
-	}
-}
-
-func (d *Database) FilteringItems(price1, price2, rating1, rating2 float64) {
-	for i := 0; i < len(d.Items); i++ {
-		if d.Items[i].Price >= price1 && d.Items[i].Price <= price2 && d.Items[i].Rating >= rating1 && d.Items[i].Rating <= rating2 {
-			fmt.Println("We found item that you searched!")
-			fmt.Println(d.Items[i])
-			return
-		
-		} 
-	}
-	fmt.Println("No such item with these price and rating!!!")
-}
-
-func Rate(d Database, a Authorization, itemName string, rating float64) {
-	if a.SignIn(d) == "You entered system!" {
-		var sum float64
-		for i := 0; i < len(d.Items); i++ {
-			if d.Items[i].Name == itemName {
-				d.Items[i].RatingList = append(d.Items[i].RatingList, rating)
-				fmt.Println("You successfully rated an item!")
-				for j := 0; j < len(d.Items[i].RatingList); j++ {
-					sum += d.Items[i].RatingList[j]
-				}
-				d.Items[i].Rating = sum / float64(len(d.Items[i].RatingList))
-			}else{
-				continue
-			}
-		}
-		
+	reg := d.Register(r)
+	if reg == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user already exists"})
 	} else {
-		fmt.Println("UNKNOWN!!!")
+		c.JSON(http.StatusOK, gin.H{"message": "user registered"})
 	}
 }
-func main() {
-	// var ar [] a.Registration
-	d := Database{}
-	d.AddItem("IPhone", 500000)
-	d.AddItem("Nokia", 100000)
-	r := Registration{Name: "Saule", Surname: "Arystanbek", Age: 18, Login: "l", Password: "p"}
-	// r1 := Registration{Name: "Jin", Password: "Kim", Age: 24, Login: "l1", Password: "p1"}
-	r1 := Registration{"Jin", "Kim", 24, "l1", "p1"}
-	d.Register(r)
-	d.Register(r1)
-	// fmt.Println(d)
-	// r1.Register(d)
-	au := Authorization{Login: "l", Password: "p"}
-	response := au.SignIn(d)
-	fmt.Println(response)
-	au1 := Authorization{Login: "l1", Password: "p1"}
-	response1 := au1.SignIn(d)
-	fmt.Println(response1)
-	d.SearchItem("IPhone")
-	Rate(d, au, "IPhone", 6)
-	fmt.Println(d.Items)
-	Rate(d, au1, "IPhone", 7)
-	Rate(d, au, "Nokia", 10)
-	d.FilteringItems(5000, 1000000, 4, 8)
-	fmt.Println(d.Items)
+
+func (a *Authorization) SignInHandler(c *gin.Context) {
+	var d Database
+	err := c.ShouldBindJSON(&d)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	msg := a.SignIn(d)
+	if msg == "No authorized!!!" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid login credentials"})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"message": "user signed in"})
+	}
 }
+
+func (d *Database) AddItemHandler(c *gin.Context) {
+	var i Item
+	err := c.ShouldBindJSON(&i)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	item := d.AddItem(i.Name, i.Price)
+	c.JSON(http.StatusOK, gin.H{"message": "item added", "item": item})
+}
+
+func (d *Database) SearchItemHandler(c *gin.Context) {
+	name := c.Query("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing required parameter 'name'"})
+		return
+	}
+	item := d.SearchItem(name)
+	if item == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+	} else {
+		c.JSON(http.StatusOK, gin.H{"item": item})
+	}
+}
+
+func (d *Database) FilteringItemsHandler(c *gin.Context) {
+	price1Str := c.Query("price1")
+	price2Str := c.Query("price2")
+	rating1Str := c.Query("rating1")
+	rating2Str := c.Query("rating2")
+	price1, err := strconv.ParseFloat(price1Str, 64)
+	if err != nil {
+		price1 = 0
+	}
+	price2, err := strconv.ParseFloat(price2Str, 64)
+	if err != nil {
+		price2 = 0
+	}
+	rating1, err := strconv.ParseFloat(rating1Str, 64)
+	if err != nil {
+		rating1 = 0
+	}
+	rating2, err := strconv.ParseFloat(rating2Str, 64)
+	if err != nil {
+		rating2 = 0
+	}
+	items :=
